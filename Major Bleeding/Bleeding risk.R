@@ -48,7 +48,7 @@ Sys.setenv(PATH = paste("C:/rtools44/usr/bin", Sys.getenv("PATH"), sep=";"))
 #------------------------------------------------------------------------------#
 
 #read data sheet
-bleed_data <- read_xlsx("outcome_lltAC.xlsx", sheet="new_bleeding")
+bleed_data <- read_xlsx("bleeding_IRR.xlsx", sheet="bleeding_IRR")
 
 # Calculate the log-transformed IRR and standard error (SE) for each study
 bleed_data <- bleed_data %>%
@@ -250,13 +250,26 @@ forplo2(exp(bleeding_combo[,c(2:4)]),
 dev.off()
 
 #------------------------------------------------------------------------------#
-# Metaregression Model
+# Metaregression Model for major bleeding
 #------------------------------------------------------------------------------#
+
+#read data sheet
+bleed_meta <- read_xlsx("bleeding_IRR.xlsx", sheet="major_bleeding_age") #for mean age difference covariate
+bleed_meta <- read_xlsx("bleeding_IRR.xlsx", sheet="major_bleeding_male") #for proportionate male difference covariate
+bleed_meta <- read_xlsx("bleeding_IRR.xlsx", sheet="bleeding_IRR") #for AC/LLT covariate
+
+
+# Calculate the log-transformed IRR and standard error (SE) for each study
+bleed_meta <- bleed_meta %>%
+  mutate(
+    log_IRR = log(IRR),
+    SE_log_IRR = (log(IRR_upper) - log(IRR_lower)) / 3.92
+  )
 
 # Fit the Bayesian model using brms
 model_metareg <- brm(
-  formula = log_IRR | se(SE_log_IRR) ~  AC + (1 | Study),#for meta-regression model 
-  data = major_age,  # Your prepared data
+  formula = log_IRR | se(SE_log_IRR) ~  AC + (1 | Study),#for meta-regression model
+  data = bleed_meta,  # Your prepared data
   family = gaussian(),  # Gaussian distribution for the continuous log-transformed IRR
   prior = c(
     prior(normal(0,1), class = "Intercept"),  # Prior for the intercept
@@ -272,7 +285,7 @@ model_metareg <- brm(
 summary(model_metareg)
 
 # Get predicted values with uncertainty
-newdata <- major %>% 
+newdata <- bleed_meta %>% 
   mutate(pred = fitted(model_metareg, newdata = ., re_formula = NULL, summary = TRUE)[, "Estimate"],
          lower = fitted(model_metareg, newdata = ., re_formula = NULL, summary = TRUE)[, "Q2.5"],
          upper = fitted(model_metareg, newdata = ., re_formula = NULL, summary = TRUE)[, "Q97.5"])
@@ -291,10 +304,10 @@ ggplot(newdata, aes(x = AC, y = log_IRR)) +
   theme_minimal()
 
 # Get predictions with uncertainty
-bleed_data_pred <- bleed_data %>%
-  mutate(predicted = fitted(model, newdata = ., re_formula = NA)[, "Estimate"],
-         lower = fitted(model, newdata = ., re_formula = NA)[, "Q2.5"],
-         upper = fitted(model, newdata = ., re_formula = NA)[, "Q97.5"])
+bleed_data_pred <- bleed_meta %>%
+  mutate(predicted = fitted(model_metareg, newdata = ., re_formula = NA)[, "Estimate"],
+         lower = fitted(model_metareg, newdata = ., re_formula = NA)[, "Q2.5"],
+         upper = fitted(model_metareg, newdata = ., re_formula = NA)[, "Q97.5"])
 
 # Plot numerical variables
 ggplot(bleed_data_pred, aes(x = age_diff, y = log_IRR)) +
@@ -310,7 +323,7 @@ ggplot(bleed_data_pred, aes(x = age_diff, y = log_IRR)) +
   theme_minimal()
 
 #------------------------------------------------------------------------------#
-# Funnel plot for publication bias
+# Funnel plot for publication bias for major bleeding
 #------------------------------------------------------------------------------#
 
 ##Funnel plot for publication bias
@@ -341,7 +354,7 @@ ggplot(major, aes(x = log_IRR, y = SE_log_IRR)) +
 dev.off()
 
 #------------------------------------------------------------------------------#
-# Leave one out analysis
+# Leave one out analysis for major bleeding
 #------------------------------------------------------------------------------#
 
 # Function to fit brms model on data subset and extract summaries
