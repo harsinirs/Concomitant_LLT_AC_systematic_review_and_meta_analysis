@@ -84,6 +84,9 @@ model <- brm(
   save_pars = save_pars(all = TRUE)
 )
 
+##model diagnostics
+pairs(model)
+
 # Check the model summary
 summary(model)
 #extract group level estimates
