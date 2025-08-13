@@ -1,6 +1,11 @@
 #------------------------------------------------------------------------------#
-# Leave one out analysis for primary outcomes
+# Leave one out analysis for primary outcomes                                  #
 #------------------------------------------------------------------------------#
+#         Created: 30.07.2025                                                  #
+#         Last Updated: 13.08.2025                                             #
+#         Coded by: Harsini R S                                                #
+################################################################################
+
 
 # Function to fit brms model on data subset and extract summaries
 fit_and_extract <- function(data_subset, full_data_size) {
