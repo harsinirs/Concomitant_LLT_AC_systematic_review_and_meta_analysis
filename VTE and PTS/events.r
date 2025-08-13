@@ -2,9 +2,9 @@
 # Concomitant lipid-lowering and anticoagulation therapy versus                #
 # anticoagulation monotherapy for venous thromboembolism prevention:           #
 # a systematic review and Bayesian meta-analysis                               #
-#                                                                              #
+#Code for event incidence                                                                              #
 #         Created: 24.07.2025                                                  #
-#         Last Updated: 08.08.2025                                             #
+#         Last Updated: 13.08.2025                                             #
 #         Coded by: Harsini R S                                                #
 ################################################################################
 
@@ -28,6 +28,7 @@ library(stringr)
 library(forcats)
 library(moments)
 library(extrafont)
+library(ggrepel)
 
 ##Loading fonts for the first time
 font_import()
@@ -48,16 +49,25 @@ Sys.setenv(PATH = paste("C:/rtools44/usr/bin", Sys.getenv("PATH"), sep=";"))
 #------------------------------------------------------------------------------#
 
 #read data sheet
-vte_data <- read_xlsx("events_IRR.xlsx", sheet="VTE_IRR")
-pts_data <- read_xlsx("events_IRR.xlsx", sheet="PTS_IRR")
+vte_data <- read_xlsx("outcome_lltAC.xlsx", sheet="VTE_IRR")
+pts_data <- read_xlsx("outcome_lltAC.xlsx", sheet="PTS_IRR")
 
 # Calculate the log-transformed IRR and standard error (SE) for each study
 ##for VTE
 vte_data <- vte_data %>%
   mutate(
-    #log_RR = log(RR)
     log_IRR = log(IRR),
     SE_log_IRR = (log(IRR_upper) - log(IRR_lower)) / 3.92
+  )
+
+
+pts_data$se_logRR <- sqrt(
+  (1/pts_data$event.e) - (1/pts_data$n.e) +
+    (1/pts_data$event.c) - (1/pts_data$n.c)
+)
+pts_data <- pts_data %>%
+  mutate(
+    log_RR = log(RR)
   )
 
 #------------------------------------------------------------------------------#
@@ -66,10 +76,10 @@ vte_data <- vte_data %>%
 
 # Fit the Bayesian model using brms
 model <- brm(
-  #formula = log_IRR ~ 1 + (1 | Study),  # Log-transformed IRR with random effects for study,removed the se() term
-  #formula = log_IRR | se(SE_log_IRR) ~  AC + (1 | Study),#for meta-regression
-  formula = log_IRR | se(SE_log_IRR) ~  1 + (1 | Study),#by default, the se terms replace the sigma, resulting in sigma 0 and NA for Rhat and ESS
-  data = ICH,  # Your prepared data
+  #by default, the se terms replace the sigma, resulting in sigma 0 and NA for Rhat and ESS
+  formula = log_RR | se(se_logRR) ~  1+(1 | Study), #for PTS
+  #formula = log_IRR | se(SE_log_IRR) ~  1 + (1 | Study),#for VTE
+  data = pts_data,  # Your prepared data - pts_data or vte_data
   family = gaussian(),  # Gaussian distribution for the continuous log-transformed IRR
   prior = c(
     prior(normal(0,1), class = "Intercept"),  # Prior for the intercept
@@ -87,6 +97,7 @@ pairs(model)
 
 # Check the model summary
 summary(model)
+
 #extract group level estimates
 ranef(model)
 
@@ -101,12 +112,16 @@ post.samples <- post.samples %>%
   )
 
 ##check the probability of our pooled effect being smaller than 0
-smd.ecdf.ich <- ecdf(post.samples$smd)
-smd.ecdf.ich(0)
+smd.ecdf <- ecdf(post.samples$smd)
+smd.ecdf(0)
 
-# For calculating I² from the posterior
+# For calculating I² from the posterior for VTE data
 post.samples$I2 <- (post.samples$tau^2) / 
-  (post.samples$tau^2 + mean(ICH$SE_log_IRR^2)) * 100
+  (post.samples$tau^2 + mean(vte_data$SE_log_IRR^2)) * 100
+
+# For calculating I² from the posterior for PTS data
+post.samples$I2 <- (post.samples$tau^2) / 
+  (post.samples$tau^2 + mean(pts_data$se_logRR^2)) * 100
 
 # Summarize I²
 quantile(post.samples$I2, probs = c(0.025, 0.5, 0.975))  # 95% credible interval for I²
@@ -164,7 +179,7 @@ forest.data.summary<- forest.data.summary %>%
 
 ##add columns
 forest.data.summary <- forest.data.summary%>%
-  left_join(select(ICH, Study, AC, LLT, Design), by = "Study")##choose datatset major, ICH, GIB 
+  left_join(select(pts_data, Study, AC, LLT, Design), by = "Study")##choose datatset major, ICH, GIB 
 forest.data.summary<- forest.data.summary%>%
   left_join(select(skewness_table, Study, Skewness), by = "Study")
 
@@ -179,7 +194,9 @@ loadfonts(device = "win", quiet = TRUE)
 ##convert to dataframe for forplo
 ##convert forest.data.summary to specific outcome major, ICH, GIB forest plot data summary
 ##eg forest.data.summary.ich<-as.data.frame(forest.data.summary)
-forest.data.summary.major<-as.data.frame(forest.data.summary)
+forest.data.summary.vte<-as.data.frame(forest.data.summary)
+#or
+forest.data.summary.pts<-as.data.frame(forest.data.summary)
 
 #------------------------------------------------------------------------------#
 # Forest plots
@@ -187,7 +204,7 @@ forest.data.summary.major<-as.data.frame(forest.data.summary)
 
 ##forest plot single outcome
 #save image
-png(file = "forest_major_bleeding_30_7_2.png", width = 4000, height = 2000, res = 300)
+png(file = "forest_rvte_30_7.png", width = 4000, height = 2000, res = 300)
 forplo2(exp(forest.data.summary.major[,c(2:4)]), 
         normal.pdf = 1:nrow(forest.data.summary.major), ci.edge=F, row.labels = forest.data.summary.major$Study,
         normal.skew = forest.data.summary.major$Skewness,
@@ -204,73 +221,57 @@ dev.off()
 
 ##combined outcomes plots
 ##dataframes list
-forest.data.summary.major
-forest.data.summary.ich
-forest.data.summary.gib
+forest.data.summary.vte
+forest.data.summary.pts
 
 #combine dfs
-bleeding_combo<-rbind(
-  cbind(forest.data.summary.major, Outcome = "Major Bleeding"),
-  cbind(forest.data.summary.ich, Outcome = "ICH"),
-  cbind(forest.data.summary.gib, Outcome = "GIB")
+events_combo<-rbind(
+  cbind(forest.data.summary.vte, Outcome = "Recurrent Venous Thromboembolism"),
+  cbind(forest.data.summary.pts, Outcome = "Post-Thrombotic Syndrome")
 )
 
 #assign groups with ID
-bleeding_combo <-cbind(bleeding_combo, group_id = c(1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,3,3,3,3))
+events_combo <-cbind(events_combo, group_id = c(1,1,1,1,1,1,1,2,2,2,2))
 
 ##assign groups names
-bleeding_combo$group_name <- ifelse(
-  bleeding_combo$group_id == 1, "Major Bleeding",
+events_combo$group_name <- ifelse(
+  events_combo$group_id == 1, "Recurrent Venous Thromboembolism",
   ifelse(
-    bleeding_combo$group_id == 2, "Intracranial Hemorrhage",
-    ifelse(
-      bleeding_combo$group_id == 3, "Gastrointestinal Bleeding",
-          NA  # (optional: handles unexpected values)
-        )
-      )
+    events_combo$group_id == 2, "Post-Thrombotic Syndrome",
+      NA  # (optional: handles unexpected values)
     )
+  )
+)
 
 #plot
-
-forplo2(exp(bleeding_combo[,c(2:4)]), 
-        normal.pdf = 1:nrow(bleeding_combo), ci.edge=F, row.labels = bleeding_combo$Study,
-        normal.skew = bleeding_combo$Skewness,
+png(file = "forest_rvte_pts_incidence_13_08.png", width = 4000, height = 3000, res = 300)
+forplo2(exp(events_combo[,c(2:4)]), 
+        normal.pdf = 1:nrow(events_combo), ci.edge=F, row.labels = events_combo$Study,
+        normal.skew = events_combo$Skewness,
         normal.col = 4, normal.alpha = 0.2, 
-        title = "Bleeding Risk",
-        add.columns = bleeding_combo[,8:10],
+        title = "Recurrent Venous Thromboembolism and Post-Thrombotic Syndrome Incidence",
+        add.columns = events_combo[,8:10],
         add.colnames = c('AC','LLT','Design'),
-        groups = as.numeric(factor(bleeding_combo$group_id)),#group
-        grouplabs = unique(bleeding_combo$group_name),#group labels
+        groups = as.numeric(factor(events_combo$group_id)),#group
+        grouplabs = unique(events_combo$group_name),#group labels
         group.space = 2,
-        diamond.pdf = c(11,15,19), diamond.col = 'red',
-        column.spacing = 5, margin.right = 15, font = 'Corbel', shade.every = 1, shade.col = 4, em = 'SMD',
-        extra.line = c("P(RR < 1) = 0.99      tau = 0.16      I² = 47%", "P(RR < 1) = 0.79      tau = 0.48      I² = 91%", "P(RR<1) = 0.99      tau = 0.09      I² = 45%"),
-        extra.line.y = c(15.5, 8.5, 0.55),
-        extra.line.xshift = -3
-        )
+        diamond.pdf = c(7,11), diamond.col = 'red',
+        column.spacing = 5, margin.right = 15,margin.left = 15, font = 'Corbel', shade.every = 1, shade.col = 4, em = 'SMD',
+        extra.line = c("P(RR < 1) = 0.98      tau = 0.16      I² = 7%", "P(RR < 1) = 0.73      tau = 0.44      I² = 45%"),
+        extra.line.y = c(9, 2),
+        extra.line.xshift = -2.5
+)
 dev.off()
 
 #------------------------------------------------------------------------------#
-# Metaregression Model for major bleeding
+# Metaregression Model for rVTE
 #------------------------------------------------------------------------------#
 
-#read data sheet
-bleed_meta <- read_xlsx("bleeding_IRR.xlsx", sheet="major_bleeding_age") #for mean age difference covariate
-bleed_meta <- read_xlsx("bleeding_IRR.xlsx", sheet="major_bleeding_male") #for proportionate male difference covariate
-bleed_meta <- read_xlsx("bleeding_IRR.xlsx", sheet="bleeding_IRR") #for AC/LLT covariate
-
-
-# Calculate the log-transformed IRR and standard error (SE) for each study
-bleed_meta <- bleed_meta %>%
-  mutate(
-    log_IRR = log(IRR),
-    SE_log_IRR = (log(IRR_upper) - log(IRR_lower)) / 3.92
-  )
 
 # Fit the Bayesian model using brms
 model_metareg <- brm(
-  formula = log_IRR | se(SE_log_IRR) ~  AC + (1 | Study),#for meta-regression model
-  data = bleed_meta,  # Your prepared data
+  formula = log_IRR | se(SE_log_IRR) ~  age_diff + (1 | Study),#for meta-regression model
+  data = vte_data,  # Your prepared data
   family = gaussian(),  # Gaussian distribution for the continuous log-transformed IRR
   prior = c(
     prior(normal(0,1), class = "Intercept"),  # Prior for the intercept
@@ -279,14 +280,14 @@ model_metareg <- brm(
   chains = 4,  # Number of chains for MCMC sampling
   iter = 2000,  # Number of iterations per chain
   warmup = 1000,  # Number of warm-up iterations (burn-in)
-  control = list(adapt_delta = 0.995), # Control parameter for better convergence
+  control = list(adapt_delta = 0.999), # Control parameter for better convergence
   save_pars = save_pars(all = TRUE)
 )
 
 summary(model_metareg)
 
 # Get predicted values with uncertainty
-newdata <- bleed_meta %>% 
+newdata <- vte_data %>% 
   mutate(pred = fitted(model_metareg, newdata = ., re_formula = NULL, summary = TRUE)[, "Estimate"],
          lower = fitted(model_metareg, newdata = ., re_formula = NULL, summary = TRUE)[, "Q2.5"],
          upper = fitted(model_metareg, newdata = ., re_formula = NULL, summary = TRUE)[, "Q97.5"])
@@ -305,13 +306,13 @@ ggplot(newdata, aes(x = AC, y = log_IRR)) +
   theme_minimal()
 
 # Get predictions with uncertainty
-bleed_data_pred <- bleed_meta %>%
+metareg_data_pred <- vte_data %>%
   mutate(predicted = fitted(model_metareg, newdata = ., re_formula = NA)[, "Estimate"],
          lower = fitted(model_metareg, newdata = ., re_formula = NA)[, "Q2.5"],
          upper = fitted(model_metareg, newdata = ., re_formula = NA)[, "Q97.5"])
 
 # Plot numerical variables
-ggplot(bleed_data_pred, aes(x = age_diff, y = log_IRR)) +
+ggplot(metareg_data_pred, aes(x = age_diff, y = log_IRR)) +
   geom_point(aes(size = 1 / SE_log_IRR), alpha = 0.7) +
   geom_line(aes(y = predicted), color = "blue", size = 1) +
   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, fill = "blue") +
@@ -324,14 +325,14 @@ ggplot(bleed_data_pred, aes(x = age_diff, y = log_IRR)) +
   theme_minimal()
 
 #------------------------------------------------------------------------------#
-# Funnel plot for publication bias for major bleeding
+# Funnel plot for publication bias for rVTE
 #------------------------------------------------------------------------------#
 
 ##Funnel plot for publication bias
 
-pooled<--0.17 ## pooled estmate of outcome of interest
+pooled<--0.3 ## pooled estmate of outcome of interest
 # Calculate the pseudo 95% CI lines for the funnel using outcome dataset of interest
-se_seq <- seq(0, max(major$SE_log_IRR), length.out = 100)
+se_seq <- seq(0, max(vte_data$SE_log_IRR), length.out = 100)
 upper <- pooled + 1.96 * se_seq
 lower <- pooled - 1.96 * se_seq
 
@@ -341,9 +342,9 @@ funnel_lines <- data.frame(
   y = rep(se_seq, 2),
   group = rep(c("upper", "lower"), each = 100)
 )
-png(file = "funnel_bayes_major_bleeding.png", width = 5000, height = 3000, res = 300)
+png(file = "funnel_bayes_rvte.png", width = 5000, height = 3000, res = 300)
 
-ggplot(major, aes(x = log_IRR, y = SE_log_IRR)) +
+ggplot(vte_data, aes(x = log_IRR, y = SE_log_IRR)) +
   geom_point() +
   geom_vline(xintercept = pooled, linetype = "dashed", color = "blue") +
   geom_line(data = funnel_lines, aes(x = x, y = y, group = group), color = "red") +
@@ -353,118 +354,3 @@ ggplot(major, aes(x = log_IRR, y = SE_log_IRR)) +
   labs(x = "Effect Size", y = "Standard Error")
 
 dev.off()
-
-#------------------------------------------------------------------------------#
-# Leave one out analysis for major bleeding
-#------------------------------------------------------------------------------#
-
-# Function to fit brms model on data subset and extract summaries
-fit_and_extract <- function(data_subset, full_data_size) {
-  cat("Fitting model on data with", nrow(data_subset), "rows...\n")
-  
-  model <- brm(
-    formula = log_IRR | se(SE_log_IRR) ~ 1 + (1 | Study),
-    data = data_subset,
-    family = gaussian(),
-    prior = c(
-      prior(normal(0, 1), class = "Intercept"),
-      prior(cauchy(0, 0.5), class = "sd")
-    ),
-    chains = 4,
-    iter = 2000,
-    warmup = 1000,
-    control = list(adapt_delta = 0.995),
-    save_pars = save_pars(all = TRUE),
-    refresh = 0  # suppress sampling progress output
-  )
-  
-  # Extract posterior draws and rename for clarity
-  post.samples <- as_draws_df(model) %>%
-    rename(
-      smd = b_Intercept,
-      tau = sd_Study__Intercept
-    )
-  
-  cat("Model fitting done. Extracting summaries...\n")
-  
-  # Posterior probability pooled effect < 0
-  p_less_0 <- mean(post.samples$smd < 0)
-  
-  # Calculate posterior I²
-  post.samples$I2 <- (post.samples$tau^2) / 
-    (post.samples$tau^2 + mean(data_subset$SE_log_IRR^2)) * 100
-  
-  I2_q <- quantile(post.samples$I2, probs = c(0.025, 0.5, 0.975))
-  
-  # Skewness of the effect size posterior
-  skew_val <- skewness(post.samples$smd)
-  
-  # Summaries for intercept including 95% credible intervals
-  smd_mean <- mean(post.samples$smd)
-  smd_lower <- quantile(post.samples$smd, 0.025)
-  smd_upper <- quantile(post.samples$smd, 0.975)
-  
-  # Mean tau (between-study heterogeneity)
-  tau_mean <- mean(post.samples$tau)
-  
-  # Study label: "All" if full data, else LOO name of excluded study
-  study_label <- ifelse(
-    nrow(data_subset) == full_data_size,
-    "All",
-    paste0("LOO: ", setdiff(unique(major$Study), unique(data_subset$Study)))
-  )
-  
-  cat("Summaries for", study_label, "computed.\n\n")
-  
-  tibble(
-    Study = study_label,
-    Intercept = smd_mean,
-    Lower_CI = smd_lower,
-    Upper_CI = smd_upper,
-    Skewness = skew_val,
-    P_RR_less_0 = p_less_0,
-    Tau = tau_mean,
-    I2_lower = I2_q[1],
-    I2_median = I2_q[2],
-    I2_upper = I2_q[3]
-  )
-}
-
-# Get study names for LOO
-studies <- unique(major$Study)
-full_data_size <- nrow(major)
-
-cat("Starting full model fit with all data...\n")
-
-# Fit full model once (no study left out)
-full_result <- fit_and_extract(major, full_data_size)
-
-# Initialize list to store LOO results
-loo_results <- vector("list", length(studies))
-
-# Loop over studies
-for (i in seq_along(studies)) {
-  cat("Running LOO iteration leaving out study:", studies[i], "\n")
-  
-  # Subset data excluding current study
-  loo_data <- subset(major, Study != studies[i])
-  
-  # Fit model and extract summaries
-  loo_results[[i]] <- fit_and_extract(loo_data, full_data_size)
-}
-
-cat("LOO fitting completed. Combining results...\n")
-
-# Combine all results: full data + LOO iterations
-all_results <- bind_rows(full_result, bind_rows(loo_results))
-
-# Optional: reorder columns
-all_results <- all_results %>%
-  select(Study, Intercept, Lower_CI, Upper_CI, Skewness, P_RR_less_0, Tau, I2_lower, I2_median, I2_upper)
-
-cat("Final results:\n")
-print(all_results)
-
-# Optionally, you may want to save or export the results table here
-# write.csv(all_results, "loo_results_summary.csv", row.names = FALSE)
-
