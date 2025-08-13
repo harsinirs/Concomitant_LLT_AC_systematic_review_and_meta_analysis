@@ -271,7 +271,7 @@ forplo2(bio_combo[,c(2:4)],
 dev.off()
 
 #------------------------------------------------------------------------------#
-# Metaregression Model for major bleeding
+# Metaregression Model for biomarkers
 #------------------------------------------------------------------------------#
 bio_metareg<- read_xlsx("outcome_lltAC.xlsx", sheet="biomarker_age")
 
@@ -392,7 +392,7 @@ ggplot(CRP, aes(x = log_IRR, y = SE_log_IRR)) +
 dev.off()
 
 #------------------------------------------------------------------------------#
-# Leave one out analysis for major bleeding
+# Leave one out analysis for biomarkers
 #------------------------------------------------------------------------------#
 
 # Function to fit brms model on data subset and extract summaries
