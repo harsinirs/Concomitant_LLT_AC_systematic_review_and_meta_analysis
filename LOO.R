@@ -8,6 +8,7 @@
 
 
 # Function to fit brms model on data subset and extract summaries
+##change dataset to outcome of interest
 fit_and_extract <- function(data_subset, full_data_size) {
   cat("Fitting model on data with", nrow(data_subset), "rows...\n")
   
@@ -60,7 +61,7 @@ fit_and_extract <- function(data_subset, full_data_size) {
   study_label <- ifelse(
     nrow(data_subset) == full_data_size,
     "All",
-    paste0("LOO: ", setdiff(unique(major$Study), unique(data_subset$Study)))
+    paste0("LOO: ", setdiff(unique(vte_data$Study), unique(data_subset$Study)))##change dataset to outcome of interest
   )
   
   cat("Summaries for", study_label, "computed.\n\n")
