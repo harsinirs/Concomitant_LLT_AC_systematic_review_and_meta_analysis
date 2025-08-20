@@ -179,7 +179,7 @@ forest.data.summary<- forest.data.summary %>%
 
 ##add columns
 forest.data.summary <- forest.data.summary%>%
-  left_join(select(pts_data, Study, AC, LLT, Design), by = "Study")##choose datatset major, ICH, GIB 
+  left_join(select(pts_data, Study, AC, LLT, Design), by = "Study")
 forest.data.summary<- forest.data.summary%>%
   left_join(select(skewness_table, Study, Skewness), by = "Study")
 
@@ -192,7 +192,7 @@ forest.data.summary[forest.data.summary$Study == "Pooled Effect", "Design"] <- "
 loadfonts(device = "win", quiet = TRUE) 
 
 ##convert to dataframe for forplo
-##convert forest.data.summary to specific outcome major, ICH, GIB forest plot data summary
+##convert forest.data.summary to specific outcome VTE or PTS forest plot data summary
 ##eg forest.data.summary.ich<-as.data.frame(forest.data.summary)
 forest.data.summary.vte<-as.data.frame(forest.data.summary)
 #or
