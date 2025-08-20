@@ -264,7 +264,7 @@ forplo2(bio_combo[,c(2:4)],
         group.space = 2,
         diamond.pdf = c(6,12), diamond.col = 'red',
         column.spacing = 5, margin.right = 15, font = 'Corbel', shade.every = 1, shade.col = 4, em = 'log SMD',
-        extra.line = c("P(SMD<0) = 0.88      tau = 0.2      I² = 27%", "P(SMD<0) = 0.98      tau = 0.71      I² = 81%"),
+        extra.line = c("P(SMD<0) = 0.88      tau = 0.2      I² = 27%", "P(SMD<0) = 0.98      tau = 0.71      I² = 81%","P(SMD<0) = 0.88      tau = 0.2      I² = 27%", "P(SMD<0) = 0.98      tau = 0.71      I² = 81%")
         extra.line.y = c(11, 2),
         extra.line.xshift = -0.1
 )
