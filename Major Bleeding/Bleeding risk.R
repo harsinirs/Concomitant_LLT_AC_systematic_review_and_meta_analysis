@@ -59,7 +59,7 @@ bleed_data <- bleed_data %>%
 
 ##subset outcomes
 major <-subset(bleed_data, Outcome == "major bleeding")
-ICH <-subset(bleed_data, Outcome == "ICH")
+#ICH <-subset(bleed_data, Outcome == "ICH")
 GIB <-subset(bleed_data, Outcome == "GI")
 
 #------------------------------------------------------------------------------#
@@ -69,9 +69,9 @@ GIB <-subset(bleed_data, Outcome == "GI")
 # Fit the Bayesian model using brms
 model <- brm(
   #formula = log_IRR ~ 1 + (1 | Study),  # Log-transformed IRR with random effects for study,removed the se() term
-  #formula = log_IRR | se(SE_log_IRR) ~  AC + (1 | Study),#for meta-regression
   formula = log_IRR | se(SE_log_IRR) ~  1 + (1 | Study),#by default, the se terms replace the sigma, resulting in sigma 0 and NA for Rhat and ESS
-  data = ICH,  # Your prepared data
+  #formula = log_IRR | se(SE_log_IRR) ~  1 + (1 | Study/Subgroup),#heirarchial nested model for when study reports multiple related estimates -  for GIB in this analysis
+  data = major,  # Your prepared data 
   family = gaussian(),  # Gaussian distribution for the continuous log-transformed IRR
   prior = c(
     prior(normal(0,1), class = "Intercept"),  # Prior for the intercept
