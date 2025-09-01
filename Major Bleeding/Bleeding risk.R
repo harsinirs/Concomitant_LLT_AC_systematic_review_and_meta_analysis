@@ -460,13 +460,10 @@ cat("LOO fitting completed. Combining results...\n")
 # Combine all results: full data + LOO iterations
 all_results <- bind_rows(full_result, bind_rows(loo_results))
 
-# Optional: reorder columns
-all_results <- all_results %>%
-  select(Study, Intercept, Lower_CI, Upper_CI, Skewness, P_RR_less_0, Tau, I2_lower, I2_median, I2_upper)
 
 cat("Final results:\n")
 print(all_results)
 
-# Optionally, you may want to save or export the results table here
+# Optionally to save or export the results table here
 # write.csv(all_results, "loo_results_summary.csv", row.names = FALSE)
 
