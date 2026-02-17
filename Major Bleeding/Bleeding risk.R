@@ -465,5 +465,5 @@ cat("Final results:\n")
 print(all_results)
 
 # Optionally to save or export the results table here
-# write.csv(all_results, "loo_results_summary.csv", row.names = FALSE)
+ write.csv(all_results, "loo_results_summary.csv", row.names = FALSE)
 
